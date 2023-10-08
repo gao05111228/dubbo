@@ -45,6 +45,11 @@ import java.util.regex.Pattern;
 
 /**
  * Load dubbo extensions
+ * <p>
+ * <p>
+ * 拓展加载器。这是 Dubbo SPI 的核心。
+ *
+ *
  * <ul>
  * <li>auto inject dependency extension </li>
  * <li>auto wrap extension in wrapper </li>
