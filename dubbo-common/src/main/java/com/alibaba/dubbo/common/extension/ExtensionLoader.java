@@ -437,16 +437,24 @@ public class ExtensionLoader<T> {
         }
     }
 
+    /**
+     * 获取自适应拓展的入口方法
+     * @return
+     */
     @SuppressWarnings("unchecked")
     public T getAdaptiveExtension() {
+        // 从缓存中获取自适应拓展
         Object instance = cachedAdaptiveInstance.get();
+        // 缓存未命中
         if (instance == null) {
             if (createAdaptiveInstanceError == null) {
                 synchronized (cachedAdaptiveInstance) {
                     instance = cachedAdaptiveInstance.get();
                     if (instance == null) {
                         try {
+                            // 创建自适应拓展
                             instance = createAdaptiveExtension();
+                            // 设置自适应拓展到缓存中
                             cachedAdaptiveInstance.set(instance);
                         } catch (Throwable t) {
                             createAdaptiveInstanceError = t;
@@ -489,6 +497,7 @@ public class ExtensionLoader<T> {
 
     @SuppressWarnings("unchecked")
     private T createExtension(String name) {
+        // 从配置文件中加载所有的拓展类，可得到“配置项名称”到“配置类”的映射关系表
         Class<?> clazz = getExtensionClasses().get(name);
         if (clazz == null) {
             throw findException(name);
@@ -496,13 +505,18 @@ public class ExtensionLoader<T> {
         try {
             T instance = (T) EXTENSION_INSTANCES.get(clazz);
             if (instance == null) {
+                // 通过反射创建实例
                 EXTENSION_INSTANCES.putIfAbsent(clazz, clazz.newInstance());
                 instance = (T) EXTENSION_INSTANCES.get(clazz);
             }
+            // 向实例中注入依赖  IOC
             injectExtension(instance);
             Set<Class<?>> wrapperClasses = cachedWrapperClasses;
             if (wrapperClasses != null && !wrapperClasses.isEmpty()) {
+                // 循环创建 Wrapper 实例
                 for (Class<?> wrapperClass : wrapperClasses) {
+                    // 将当前 instance 作为参数传给 Wrapper 的构造方法，并通过反射创建 Wrapper 实例。
+                    // 然后向 Wrapper 实例中注入依赖，最后将 Wrapper 实例再次赋值给 instance 变量
                     instance = injectExtension((T) wrapperClass.getConstructor(type).newInstance(instance));
                 }
             }
@@ -558,11 +572,14 @@ public class ExtensionLoader<T> {
     }
 
     private Map<String, Class<?>> getExtensionClasses() {
+        // 从缓存中获取已加载的拓展类
         Map<String, Class<?>> classes = cachedClasses.get();
+        // 双重检查
         if (classes == null) {
             synchronized (cachedClasses) {
                 classes = cachedClasses.get();
                 if (classes == null) {
+                    // 加载拓展类
                     classes = loadExtensionClasses();
                     cachedClasses.set(classes);
                 }
@@ -571,21 +588,30 @@ public class ExtensionLoader<T> {
         return classes;
     }
 
+    /**
+     * loadExtensionClasses 方法总共做了两件事情，一是对 SPI 注解进行解析，二是调用 loadDirectory 方法加载指定文件夹配置文件。
+     * SPI 注解解析过程比较简单，无需多说。下面我们来看一下 loadDirectory 做了哪些事情。
+     * @return
+     */
     // synchronized in getExtensionClasses
     private Map<String, Class<?>> loadExtensionClasses() {
+        // 获取 SPI 注解，这里的 type 变量是在调用 getExtensionLoader 方法时传入的
         final SPI defaultAnnotation = type.getAnnotation(SPI.class);
         if (defaultAnnotation != null) {
             String value = defaultAnnotation.value();
             if ((value = value.trim()).length() > 0) {
+                // 对 SPI 注解内容进行切分
                 String[] names = NAME_SEPARATOR.split(value);
+                // 检测 SPI 注解内容是否合法，不合法则抛出异常
                 if (names.length > 1) {
                     throw new IllegalStateException("more than 1 default extension name on extension " + type.getName()
                             + ": " + Arrays.toString(names));
                 }
+                // 设置默认名称，参考 getDefaultExtension 方法
                 if (names.length == 1) cachedDefaultName = names[0];
             }
         }
-
+        // 加载指定文件夹下的配置文件
         Map<String, Class<?>> extensionClasses = new HashMap<String, Class<?>>();
         loadDirectory(extensionClasses, DUBBO_INTERNAL_DIRECTORY);
         loadDirectory(extensionClasses, DUBBO_DIRECTORY);
@@ -722,27 +748,52 @@ public class ExtensionLoader<T> {
         return extension.value();
     }
 
+    /**
+     *
+     * 创建自适应类
+     * @return
+     */
     @SuppressWarnings("unchecked")
     private T createAdaptiveExtension() {
         try {
+            // 获取自适应拓展类，并通过反射实例化
+            /**
+             * createAdaptiveExtension 方法的代码比较少，但却包含了三个逻辑，分别如下：
+             *
+             * 调用 getAdaptiveExtensionClass 方法获取自适应拓展 Class 对象
+             * 通过反射进行实例化
+             * 调用 injectExtension 方法向拓展实例中注入依赖
+             */
             return injectExtension((T) getAdaptiveExtensionClass().newInstance());
         } catch (Exception e) {
             throw new IllegalStateException("Can not create adaptive extension " + type + ", cause: " + e.getMessage(), e);
         }
     }
 
+    /**
+     * 调用 getExtensionClasses 获取所有的拓展类
+     * 检查缓存，若缓存不为空，则返回缓存
+     * 若缓存为空，则调用 createAdaptiveExtensionClass 创建自适应拓展类
+     * @return
+     */
     private Class<?> getAdaptiveExtensionClass() {
+        // 通过 SPI 获取所有的拓展类
         getExtensionClasses();
+        // 检查缓存，若缓存不为空，则直接返回缓存
         if (cachedAdaptiveClass != null) {
             return cachedAdaptiveClass;
         }
+        // 创建自适应拓展类
         return cachedAdaptiveClass = createAdaptiveExtensionClass();
     }
 
     private Class<?> createAdaptiveExtensionClass() {
+        // 构建自适应拓展代码
         String code = createAdaptiveExtensionClassCode();
         ClassLoader classLoader = findClassLoader();
+        // 获取编译器实现类
         com.alibaba.dubbo.common.compiler.Compiler compiler = ExtensionLoader.getExtensionLoader(com.alibaba.dubbo.common.compiler.Compiler.class).getAdaptiveExtension();
+        // 编译代码，生成 Class
         return compiler.compile(code, classLoader);
     }
 

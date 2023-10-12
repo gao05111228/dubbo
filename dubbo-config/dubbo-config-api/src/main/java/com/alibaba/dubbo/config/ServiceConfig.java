@@ -195,6 +195,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
 
     public synchronized void export() {
         if (provider != null) {
+            // 获取 export 和 delay 配置
             if (export == null) {
                 export = provider.getExport();
             }
@@ -202,10 +203,11 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 delay = provider.getDelay();
             }
         }
+        // 如果 export 为 false，则不导出服务
         if (export != null && !export) {
             return;
         }
-
+        // delay > 0，延时导出服务
         if (delay != null && delay > 0) {
             delayExportExecutor.schedule(new Runnable() {
                 @Override
@@ -214,6 +216,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 }
             }, delay, TimeUnit.MILLISECONDS);
         } else {
+            // 立即导出服务
             doExport();
         }
     }
@@ -226,10 +229,15 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
             return;
         }
         exported = true;
+        // 检测 interfaceName 是否合法
         if (interfaceName == null || interfaceName.length() == 0) {
             throw new IllegalStateException("<dubbo:service interface=\"\" /> interface not allow null!");
         }
+        // 检测 provider 是否为空，为空则新建一个，并通过系统变量为其初始化
         checkDefault();
+
+        // 下面几个 if 语句用于检测 provider、application 等核心配置类对象是否为空，
+        // 若为空，则尝试从其他配置类对象中获取相应的实例。
         if (provider != null) {
             if (application == null) {
                 application = provider.getApplication();
@@ -263,11 +271,15 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 monitor = application.getMonitor();
             }
         }
+        // 检测 ref 是否为泛化服务类型
         if (ref instanceof GenericService) {
+            // 设置 interfaceClass 为 GenericService.class
             interfaceClass = GenericService.class;
             if (StringUtils.isEmpty(generic)) {
+                // 设置 generic = "true"
                 generic = Boolean.TRUE.toString();
             }
+            // ref 非 GenericService 类型
         } else {
             try {
                 interfaceClass = Class.forName(interfaceName, true, Thread.currentThread()
@@ -275,8 +287,11 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
             } catch (ClassNotFoundException e) {
                 throw new IllegalStateException(e.getMessage(), e);
             }
+            // 对 interfaceClass，以及 <dubbo:method> 标签中的必要字段进行检查
             checkInterfaceAndMethods(interfaceClass, methods);
+            // 对 ref 合法性进行检测
             checkRef();
+            // 设置 generic = "false"
             generic = Boolean.FALSE.toString();
         }
         if (local != null) {
@@ -293,6 +308,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 throw new IllegalStateException("The local implementation class " + localClass.getName() + " not implement interface " + interfaceName);
             }
         }
+        // local 和 stub 在功能应该是一致的，用于配置本地存根
         if (stub != null) {
             if ("true".equals(stub)) {
                 stub = interfaceName + "Stub";
@@ -307,6 +323,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 throw new IllegalStateException("The stub implementation class " + stubClass.getName() + " not implement interface " + interfaceName);
             }
         }
+        // 检测各种对象是否为空，为空则新建，或者抛出异常
         checkApplication();
         checkRegistry();
         checkProtocol();
@@ -316,7 +333,11 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
         if (path == null || path.length() == 0) {
             path = interfaceName;
         }
+        // 导出服务
         doExportUrls();
+        // ProviderModel 表示服务提供者模型，此对象中存储了与服务提供者相关的信息。
+        // 比如服务的配置信息，服务实例等。每个被导出的服务对应一个 ProviderModel。
+        // ApplicationModel 持有所有的 ProviderModel。
         ProviderModel providerModel = new ProviderModel(getUniqueServiceName(), this, ref);
         ApplicationModel.initProviderModel(getUniqueServiceName(), providerModel);
     }
@@ -355,7 +376,9 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void doExportUrls() {
+        // 加载注册中心链接
         List<URL> registryURLs = loadRegistries(true);
+        // 遍历 protocols，并在每个协议下导出服务
         for (ProtocolConfig protocolConfig : protocols) {
             doExportUrlsFor1Protocol(protocolConfig, registryURLs);
         }
