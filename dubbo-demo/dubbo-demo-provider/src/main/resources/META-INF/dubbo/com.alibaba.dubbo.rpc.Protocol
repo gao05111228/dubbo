@@ -1,0 +1,1 @@
+protocolWrapper = com.alibaba.dubbo.demo.provider.wrapper.DemoProtocolWrapper
