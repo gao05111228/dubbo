@@ -19,6 +19,9 @@ package com.alibaba.dubbo.demo.consumer;
 import com.alibaba.dubbo.demo.DemoService;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
 public class Consumer {
 
     public static void main(String[] args) {
@@ -32,9 +35,8 @@ public class Consumer {
         while (true) {
             try {
                 Thread.sleep(1000);
-                String hello = demoService.sayHello("world"); // call remote method
+                String hello = demoService.sayHello("------------------》[" + new SimpleDateFormat("HH:mm:ss").format(new Date()) + "] world"); // call remote method
                 System.out.println(hello); // get result
-
             } catch (Throwable throwable) {
                 throwable.printStackTrace();
             }

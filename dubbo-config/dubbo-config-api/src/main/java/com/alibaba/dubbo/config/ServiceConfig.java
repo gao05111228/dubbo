@@ -487,7 +487,6 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
             }
         }
         // 添加 token 到 map 中
-
         if (!ConfigUtils.isEmpty(token)) {
             if (ConfigUtils.isDefault(token)) {
                 map.put(Constants.TOKEN_KEY, UUID.randomUUID().toString());
