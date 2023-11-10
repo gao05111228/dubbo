@@ -30,40 +30,23 @@ import com.alibaba.dubbo.config.invoker.DelegateProviderMetaDataInvoker;
 import com.alibaba.dubbo.config.model.ApplicationModel;
 import com.alibaba.dubbo.config.model.ProviderModel;
 import com.alibaba.dubbo.config.support.Parameter;
-import com.alibaba.dubbo.rpc.Exporter;
-import com.alibaba.dubbo.rpc.Invoker;
-import com.alibaba.dubbo.rpc.Protocol;
-import com.alibaba.dubbo.rpc.ProxyFactory;
-import com.alibaba.dubbo.rpc.StaticContext;
+import com.alibaba.dubbo.rpc.*;
 import com.alibaba.dubbo.rpc.cluster.ConfiguratorFactory;
 import com.alibaba.dubbo.rpc.service.GenericService;
 import com.alibaba.dubbo.rpc.support.ProtocolUtils;
 
 import java.lang.reflect.Method;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.net.SocketAddress;
-import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.net.*;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import static com.alibaba.dubbo.common.utils.NetUtils.LOCALHOST;
-import static com.alibaba.dubbo.common.utils.NetUtils.getAvailablePort;
-import static com.alibaba.dubbo.common.utils.NetUtils.getLocalHost;
-import static com.alibaba.dubbo.common.utils.NetUtils.isInvalidLocalHost;
-import static com.alibaba.dubbo.common.utils.NetUtils.isInvalidPort;
+import static com.alibaba.dubbo.common.utils.NetUtils.*;
 
 /**
  * ServiceConfig
+ * 服务提供者暴露服务配置类
  *
  * @export
  */
@@ -193,6 +176,12 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
         return unexported;
     }
 
+    /**
+     * 进一步初始化 ServiceConfig 对象。
+     * 校验 ServiceConfig 对象的配置项。
+     * 使用 ServiceConfig 对象，生成 Dubbo URL 对象数组。
+     * 使用 Dubbo URL 对象，暴露服务。
+     */
     public synchronized void export() {
         if (provider != null) {
             // 获取 export 和 delay 配置
@@ -222,6 +211,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
     }
 
     protected synchronized void doExport() {
+        // 检查是否可以暴露，若可以，标记已经暴露。
         if (unexported) {
             throw new IllegalStateException("Already unexported!");
         }
@@ -234,10 +224,12 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
             throw new IllegalStateException("<dubbo:service interface=\"\" /> interface not allow null!");
         }
         // 检测 provider 是否为空，为空则新建一个，并通过系统变量为其初始化
+        // 拼接属性配置（环境变量 + properties 属性）到 ProviderConfig 对象
         checkDefault();
 
         // 下面几个 if 语句用于检测 provider、application 等核心配置类对象是否为空，
         // 若为空，则尝试从其他配置类对象中获取相应的实例。
+        // 从 ProviderConfig 对象中，读取 application、module、registries、monitor、protocols 配置对象。
         if (provider != null) {
             if (application == null) {
                 application = provider.getApplication();
@@ -255,6 +247,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 protocols = provider.getProtocols();
             }
         }
+        // 从 ModuleConfig 对象中，读取 registries、monitor 配置对象。
         if (module != null) {
             if (registries == null) {
                 registries = module.getRegistries();
@@ -263,6 +256,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 monitor = module.getMonitor();
             }
         }
+        // 从 ApplicationConfig 对象中，读取 registries、monitor 配置对象。
         if (application != null) {
             if (registries == null) {
                 registries = application.getRegistries();
@@ -324,12 +318,21 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
             }
         }
         // 检测各种对象是否为空，为空则新建，或者抛出异常
+
+        // 校验 ApplicationConfig 配置。
         checkApplication();
+        // 校验 RegistryConfig 配置。
         checkRegistry();
+        // 校验 ProtocolConfig 配置数组。
         checkProtocol();
+        // 读取环境变量和 properties 配置到 ServiceConfig 对象。
         appendProperties(this);
+
+        // 校验 Stub 和 Mock 相关的配置
         checkStub(interfaceClass);
         checkMock(interfaceClass);
+
+        // 服务路径，缺省为接口名
         if (path == null || path.length() == 0) {
             path = interfaceName;
         }
@@ -486,8 +489,8 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 map.put(Constants.METHODS_KEY, StringUtils.join(new HashSet<String>(Arrays.asList(methods)), ","));
             }
         }
-        // 添加 token 到 map 中
 
+        // 添加 token 到 map 中   // token ，参见《令牌校验》http://dubbo.apache.org/zh-cn/docs/user/demos/token-authorization.html
         if (!ConfigUtils.isEmpty(token)) {
             if (ConfigUtils.isDefault(token)) {
                 map.put(Constants.TOKEN_KEY, UUID.randomUUID().toString());
@@ -495,7 +498,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 map.put(Constants.TOKEN_KEY, token);
             }
         }
-        // 判断协议名是否为 injvm
+        // 判断协议名是否为 injvm    协议为 injvm 时，不注册，不通知。
         if (Constants.LOCAL_PROTOCOL.equals(protocolConfig.getName())) {
             protocolConfig.setRegister(false);
             map.put("notify", "false");
@@ -515,6 +518,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
         // 组装 URL
         URL url = new URL(name, host, port, (contextPath == null || contextPath.length() == 0 ? "" : contextPath + "/") + path, map);
 
+        // 配置规则，参见《配置规则》http://dubbo.apache.org/zh-cn/docs/user/demos/config-rule.html\
         if (ExtensionLoader.getExtensionLoader(ConfiguratorFactory.class)
                 .hasExtension(url.getProtocol())) {
             // 加载 ConfiguratorFactory，并生成 Configurator 实例，然后通过实例配置 url

@@ -45,18 +45,13 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 
 import static com.alibaba.dubbo.common.utils.NetUtils.isInvalidLocalHost;
 
 /**
  * ReferenceConfig
+ * 服务消费者引用服务配置类。
  *
  * @export
  */
@@ -156,7 +151,16 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
         return urls;
     }
 
+    /**
+     * 进一步初始化 ReferenceConfig 对象。
+     * 校验 ReferenceConfig 对象的配置项。
+     * 使用 ReferenceConfig 对象，生成 Dubbo URL 对象数组。
+     * 使用 Dubbo URL 对象，应用服务。
+     *
+     * @return
+     */
     public synchronized T get() {
+        // 已销毁，不可获得
         if (destroyed) {
             throw new IllegalStateException("Already destroyed!");
         }
@@ -196,17 +200,20 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
             throw new IllegalStateException("<dubbo:reference interface=\"\" /> interface not allow null!");
         }
         // get consumer's global configuration
-        // 检测 consumer 变量是否为空，为空则创
+        // 检测 consumer 变量是否为空，为空则创   拼接属性配置（环境变量 + properties 属性）到 ConsumerConfig 对象
         checkDefault();
+        //拼接属性配置（环境变量 + properties 属性）到 ReferenceConfig 对象
         appendProperties(this);
+        //若未设置 `generic` 属性，使用 `ConsumerConfig.generic` 属性。
         if (getGeneric() == null && getConsumer() != null) {
             // 设置 generic
             setGeneric(getConsumer().getGeneric());
         }
 
-        // 检测是否为泛化接口
+        // 检测是否为泛化接口    泛化接口的实现
         if (ProtocolUtils.isGeneric(getGeneric())) {
             interfaceClass = GenericService.class;
+            // 普通接口的实现
         } else {
             try {
                 //加载类
@@ -215,24 +222,31 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
             } catch (ClassNotFoundException e) {
                 throw new IllegalStateException(e.getMessage(), e);
             }
+            // 校验接口和方法
             checkInterfaceAndMethods(interfaceClass, methods);
         }
         // -------------------------------✨ 分割线1 ✨------------------------------
 
+
+        // 直连提供者，参见文档《直连提供者》http://dubbo.apache.org/zh-cn/docs/user/demos/explicit-target.html
+        // 【直连提供者】第一优先级，通过 -D 参数指定 ，例如 java -Dcom.alibaba.xxx.XxxService=dubbo://localhost:20890
         // 从系统变量中获取与接口名对应的属性值
         String resolve = System.getProperty(interfaceName);
         String resolveFile = null;
+        // 【直连提供者】第二优先级，通过文件映射，例如 com.alibaba.xxx.XxxService=dubbo://localhost:20890
         if (resolve == null || resolve.length() == 0) {
             // 从系统属性中获取解析文件路径
             resolveFile = System.getProperty("dubbo.resolve.file");
             if (resolveFile == null || resolveFile.length() == 0) {
                 // 从指定位置加载配置文件
+                // 默认先加载，`${user.home}/dubbo-resolve.properties` 文件 ，无需配置
                 File userResolveFile = new File(new File(System.getProperty("user.home")), "dubbo-resolve.properties");
                 if (userResolveFile.exists()) {
                     // 获取文件绝对路径
                     resolveFile = userResolveFile.getAbsolutePath();
                 }
             }
+            // 存在 resolveFile ，则进行文件读取加载。
             if (resolveFile != null && resolveFile.length() > 0) {
                 Properties properties = new Properties();
                 FileInputStream fis = null;
@@ -253,6 +267,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 resolve = properties.getProperty(interfaceName);
             }
         }
+        // 设置直连提供者的 url
         if (resolve != null && resolve.length() > 0) {
             // 将 resolve 赋值给 url
             url = resolve;
@@ -265,7 +280,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
             }
         }
         // -------------------------------✨ 分割线2 ✨------------------------------
-
+        // 从 ConsumerConfig 对象中，读取 application、module、registries、monitor 配置对象。
         if (consumer != null) {
             if (application == null) {
                 // 从 consumer 中获取 Application 实例，下同
@@ -281,6 +296,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 monitor = consumer.getMonitor();
             }
         }
+        // 从 ModuleConfig 对象中，读取 registries、monitor 配置对象。
         if (module != null) {
             if (registries == null) {
                 registries = module.getRegistries();
@@ -289,6 +305,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 monitor = module.getMonitor();
             }
         }
+        // 从 ApplicationConfig 对象中，读取 registries、monitor 配置对象。
         if (application != null) {
             if (registries == null) {
                 registries = application.getRegistries();
@@ -297,8 +314,9 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 monitor = application.getMonitor();
             }
         }
-        // 检测 Application 合法性
+        // 检测 Application 合法性  // 校验 ApplicationConfig 配置。
         checkApplication();
+        // 校验 Stub 和 Mock 相关的配置
         checkStub(interfaceClass);
         // 检测本地存根配置合法性
         checkMock(interfaceClass);
@@ -338,12 +356,15 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
         appendParameters(map, this);
 
         // -------------------------------✨ 分割线4 ✨------------------------------
-
+        // 获得服务键，作为前缀
         String prefix = StringUtils.getServiceKey(map);
+        // 将 MethodConfig 对象数组，添加到 `map` 集合中。
         if (methods != null && !methods.isEmpty()) {
             // 遍历 MethodConfig 列表
             for (MethodConfig method : methods) {
+                // 将 MethodConfig 对象，添加到 `map` 集合中。
                 appendParameters(map, method, method.getName());
+                // 当 配置了 `MethodConfig.retry = false` 时，强制禁用重试
                 String retryKey = method.getName() + ".retry";
                 // 检测 map 是否包含 methodName.retry
                 if (map.containsKey(retryKey)) {
@@ -355,14 +376,16 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 }
                 // 添加 MethodConfig 中的“属性”字段到 attributes
                 // 比如 onreturn、onthrow、oninvoke 等
+                // 将带有 @Parameter(attribute = true) 配置对象的属性，添加到参数集合。参见《事件通知》http://dubbo.apache.org/zh-cn/docs/user/demos/events-notify.html
                 appendAttributes(attributes, method, prefix + "." + method.getName());
+                // 检查属性集合中的事件通知方法是否正确。若正确，进行转换。
                 checkAndConvertImplicitConfig(method, map, attributes);
             }
         }
 
         // -------------------------------✨ 分割线5 ✨------------------------------
 
-        // 获取服务消费者 ip 地址
+        // 获取服务消费者 ip 地址 // 以系统环境变量( DUBBO_IP_TO_REGISTRY ) 作为服务注册地址，参见 https://github.com/dubbo/dubbo-docker-sample 项目。
         String hostToRegistry = ConfigUtils.getSystemProperty(Constants.DUBBO_IP_TO_REGISTRY);
         if (hostToRegistry == null || hostToRegistry.length() == 0) {
             hostToRegistry = NetUtils.getLocalHost();
@@ -415,7 +438,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
             if (logger.isInfoEnabled()) {
                 logger.info("Using injvm service " + interfaceClass.getName());
             }
-        // 远程引用
+            // 远程引用
         } else {
             // url 不为空，表明用户可能想进行点对点调用
             if (url != null && url.length() > 0) { // user specified URL, could be peer-to-peer address, or register center's address.
@@ -462,7 +485,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
             // 单个注册中心或服务提供者(服务直连，下同)
             if (urls.size() == 1) {
                 invoker = refprotocol.refer(interfaceClass, urls.get(0));
-            // 多个注册中心或多个服务提供者，或者两者混合
+                // 多个注册中心或多个服务提供者，或者两者混合
             } else {
                 List<Invoker<?>> invokers = new ArrayList<Invoker<?>>();
                 URL registryURL = null;

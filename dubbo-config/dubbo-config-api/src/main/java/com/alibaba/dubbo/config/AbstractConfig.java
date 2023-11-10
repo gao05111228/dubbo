@@ -37,13 +37,15 @@ import java.util.regex.Pattern;
 
 /**
  * Utility methods and public methods for parsing configuration
- *
+ *  AbstractConfig 主要提供配置解析与校验相关的工具方法
  * @export
  */
 public abstract class AbstractConfig implements Serializable {
 
     protected static final Logger logger = LoggerFactory.getLogger(AbstractConfig.class);
     private static final long serialVersionUID = 4267533505537413570L;
+
+    // ========== 属性值的格式校验，参见本类的 `#checkXXX` 方法 BEGIN ==========
     private static final int MAX_LENGTH = 200;
 
     private static final int MAX_PATH_LENGTH = 200;
@@ -59,7 +61,22 @@ public abstract class AbstractConfig implements Serializable {
     private static final Pattern PATTERN_NAME_HAS_SYMBOL = Pattern.compile("[:*,\\s/\\-._0-9a-zA-Z]+");
 
     private static final Pattern PATTERN_KEY = Pattern.compile("[*,\\-._0-9a-zA-Z]+");
+
+    // ========== 属性值的格式校验，参见本类的 `#checkXXX` 方法 END ==========
+    /**
+     * 新老版本的 properties 的 key 映射
+     *
+     * key：新版本的配置 映射
+     * value：旧版本的配置 映射
+     *
+     * 来自 2012/3/8 下午 5：51 cb1f705 提交
+     * DUBBO-251 增加API覆盖dubbo.properties的测试，以及旧版本配置项测试。
+     */
     private static final Map<String, String> legacyProperties = new HashMap<String, String>();
+    /**
+     * 配置类名的后缀
+     * 例如，ServiceConfig 后缀为 Config；ServiceBean 后缀为 Bean。
+     */
     private static final String[] SUFFIXES = new String[]{"Config", "Bean"};
 
     static {
@@ -89,6 +106,13 @@ public abstract class AbstractConfig implements Serializable {
         return value;
     }
 
+    /**
+     * 读取环境变量和 properties 配置到配置对象
+     *
+     * 参见：<a href="https://dubbo.gitbooks.io/dubbo-user-book/configuration/properties.html">属性配置</a>
+     *
+     * @param config 配置对象
+     */
     protected static void appendProperties(AbstractConfig config) {
         if (config == null) {
             return;
@@ -173,12 +197,13 @@ public abstract class AbstractConfig implements Serializable {
     }
 
     /**
+     * 将配置对象的属性，添加到参数集合
      * URL中parameters参数：
      *      通过该方法可以添加
      *
-     * @param parameters
-     * @param config
-     * @param prefix
+     * @param parameters 参数集合
+     * @param config 配置对象
+     * @param prefix 属性前缀
      */
     @SuppressWarnings("unchecked")
     protected static void appendParameters(Map<String, String> parameters, Object config, String prefix) {
@@ -251,6 +276,13 @@ public abstract class AbstractConfig implements Serializable {
         appendAttributes(parameters, config, null);
     }
 
+    /**
+     * 将带有 @Parameter(attribute = true) 配置对象的属性，添加到参数集合
+     *
+     * @param parameters 参数集合
+     * @param config 配置对象
+     * @param prefix 前缀
+     */
     protected static void appendAttributes(Map<Object, Object> parameters, Object config, String prefix) {
         if (config == null) {
             return;
@@ -416,6 +448,12 @@ public abstract class AbstractConfig implements Serializable {
         this.id = id;
     }
 
+    /**
+     * 读取注解配置到配置对象
+     *
+     * @param annotationClass 注解的类
+     * @param annotation 注解
+     */
     protected void appendAnnotation(Class<?> annotationClass, Object annotation) {
         Method[] methods = annotationClass.getMethods();
         for (Method method : methods) {

@@ -19,7 +19,7 @@ package com.alibaba.dubbo.config.support;
 import java.lang.annotation.*;
 
 /**
- * 用于 Dubbo URL 的 parameters 拼接。
+ * Parameter 参数注解，用于 Dubbo URL 的 parameters 拼接。
  * <p>
  * Parameter
  */

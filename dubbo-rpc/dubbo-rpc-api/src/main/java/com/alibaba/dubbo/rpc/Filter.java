@@ -33,6 +33,16 @@ public interface Filter {
      * // after filter
      * return result;
      * </code>
+     * 执行 Invoker 的过滤逻辑
+     *
+     * // 【自己实现】before filter
+     *
+     * Result result = invoker.invoke(invocation);
+     *
+     * // 【自己实现】after filter
+     *
+     * return result;
+     *
      *
      * @param invoker    service
      * @param invocation invocation.

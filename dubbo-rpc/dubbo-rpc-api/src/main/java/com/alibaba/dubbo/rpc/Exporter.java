@@ -18,7 +18,7 @@ package com.alibaba.dubbo.rpc;
 
 /**
  * Exporter. (API/SPI, Prototype, ThreadSafe)
- *
+ * Exporter : Invoker 暴露服务在 Protocol 上的对象。
  * @see com.alibaba.dubbo.rpc.Protocol#export(Invoker)
  * @see com.alibaba.dubbo.rpc.ExporterListener
  * @see com.alibaba.dubbo.rpc.protocol.AbstractExporter
@@ -27,13 +27,14 @@ public interface Exporter<T> {
 
     /**
      * get invoker.
-     *
+     * 获得对应的 Invoke
      * @return invoker
      */
     Invoker<T> getInvoker();
 
     /**
      * unexport.
+     * 取消暴露。
      * <p>
      * <code>
      * getInvoker().destroy();
