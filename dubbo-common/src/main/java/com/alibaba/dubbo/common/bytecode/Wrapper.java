@@ -101,26 +101,33 @@ public abstract class Wrapper {
 
         if (c == Object.class)
             return OBJECT_WRAPPER;
-
+        // 从缓存中获取 Wrapper 实例
         Wrapper ret = WRAPPER_MAP.get(c);
         if (ret == null) {
+            // 缓存未命中，创建 Wrapper
             ret = makeWrapper(c);
+            // 写入缓存
             WRAPPER_MAP.put(c, ret);
         }
         return ret;
     }
 
     private static Wrapper makeWrapper(Class<?> c) {
+        // 检测 c 是否为基本类型，若是则抛出异常
         if (c.isPrimitive())
             throw new IllegalArgumentException("Can not create wrapper for primitive type: " + c);
 
         String name = c.getName();
         ClassLoader cl = ClassHelper.getClassLoader(c);
-
+        // c1 用于存储 setPropertyValue 方法代码
         StringBuilder c1 = new StringBuilder("public void setPropertyValue(Object o, String n, Object v){ ");
+        // c2 用于存储 getPropertyValue 方法代码
         StringBuilder c2 = new StringBuilder("public Object getPropertyValue(Object o, String n){ ");
+        // c3 用于存储 invokeMethod 方法代码
         StringBuilder c3 = new StringBuilder("public Object invokeMethod(Object o, String n, Class[] p, Object[] v) throws " + InvocationTargetException.class.getName() + "{ ");
 
+        // 生成类型转换代码及异常捕捉代码，比如：
+        //   DemoService w; try { w = ((DemoServcie) $1); }}catch(Throwable e){ throw new IllegalArgumentException(e); }
         c1.append(name).append(" w; try{ w = ((").append(name).append(")$1); }catch(Throwable e){ throw new IllegalArgumentException(e); }");
         c2.append(name).append(" w; try{ w = ((").append(name).append(")$1); }catch(Throwable e){ throw new IllegalArgumentException(e); }");
         c3.append(name).append(" w; try{ w = ((").append(name).append(")$1); }catch(Throwable e){ throw new IllegalArgumentException(e); }");
